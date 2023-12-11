@@ -23,6 +23,18 @@ type CoreDNSMySql struct {
 	lastZoneUpdate time.Time
 	zoneUpdateTime time.Duration
 	zones          []string
+	names          []string
+}
+
+type KnownZones = []string
+
+func containsName(names []string, name string) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ServeDNS implements the plugin.Handler interface.
@@ -44,6 +56,12 @@ func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter,
 		return plugin.NextOrFailure(handler.Name(), handler.Next, ctx, w, r)
 	}
 
+	subdomain := qName[:len(qName)-len(qZone)-1]
+
+	if !containsName(handler.names, subdomain) {
+		return plugin.NextOrFailure(handler.Name(), handler.Next, ctx, w, r)
+	}
+
 	records, err := handler.findRecord(qZone, qName, qType)
 	if err != nil {
 		return handler.errorResponse(state, dns.RcodeServerFailure, err)
@@ -60,7 +78,7 @@ func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter,
 		records = append(records, recs...)
 	}
 
-    if qType == "SOA" {
+	if qType == "SOA" {
 		recsNs, err := handler.findRecord(qZone, qName, "NS")
 		if err != nil {
 			return handler.errorResponse(state, dns.RcodeServerFailure, err)
