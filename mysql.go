@@ -81,6 +81,33 @@ func (handler *CoreDNSMySql) findWildcardRecords(zone string, name string, types
 	return handler.findRecord(zone, target, types...)
 }
 
+func (handler *CoreDNSMySql) loadNames() error {
+	db, err := handler.db()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	result, err := db.Query("SELECT DISTINCT name FROM " + handler.tableName)
+	if err != nil {
+		return err
+	}
+
+	var name string
+	names := make([]string, 0)
+	for result.Next() {
+		err = result.Scan(&name)
+		if err != nil {
+			return err
+		}
+
+		names = append(names, name)
+	}
+
+	handler.names = names
+	return nil
+}
+
 func (handler *CoreDNSMySql) loadZones() error {
 	db, err := handler.db()
 	if err != nil {
@@ -103,6 +130,8 @@ func (handler *CoreDNSMySql) loadZones() error {
 
 		zones = append(zones, zone)
 	}
+
+	handler.loadNames()
 
 	handler.lastZoneUpdate = time.Now()
 	handler.zones = zones
